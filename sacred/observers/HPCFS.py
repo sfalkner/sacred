@@ -3,10 +3,11 @@
 from __future__ import division, print_function, unicode_literals
 import json
 import os
-import os.path
 import tempfile
-import gzip,bz2
+import gzip
+import glob
 import pickle
+import tinydb
 
 from datetime import datetime
 from shutil import copyfile
@@ -196,3 +197,76 @@ class HPCFSOption(CommandLineOption):
     @classmethod
     def apply(cls, args, run):
         run.observers.append(FileStorageObserver.create(args))
+
+
+
+
+def create_tinyDB(source_dir, destination, overwrite=False, skip_incomplete=True, db_filename='run.json', logger=None):
+	""" Function to accumulate all runs in a given directory into a single
+		tinyDB file.
+	"""
+	if os.path.isfile(destination) and not overwrite:
+		fn = args.destination
+		raise FileExistsError("Databasefile %s already exists, delete it or use the argument 'overwrite=True' to recreate the DB."%destination)
+	
+	tmp_filename = destination+'.tmp'
+	db = tinydb.TinyDB(tmp_filename)
+
+	# recursively walk through the subdirs
+	for cur, dirs, files in os.walk(args.source_dir):
+		try:
+			# load the db file (which is written last, so  all other files should exist)
+			fn = os.path.join(cur,db_filename)
+			if not os.path.isfile(fn): continue
+			with open(fn, 'rb') as fh:
+				datum = json.load(fh)
+				# get relative path wrt. to the data root
+				rel_path = os.path.relpath(cur, args.source_dir)
+				# update the entries with the relative path
+				if datum['STATUS'] != 'COMPLETED' and skip_incomplete:
+					continue
+
+				for k,v in datum['result'].items():
+					datum['result'][k] = os.path.join(rel_path, v)
+
+				db.insert(datum)
+
+		except Exception as e:
+			if logger:
+				logger.INFO("Something went wrong loading subdirectory %s. Skipping it."%cur)
+				logger.INFO(e)
+			continue
+
+	# replace old db file with current one
+	os.rename(tmp_filename, destination)
+
+
+class tinydb_data(object):
+	""" Class to access the data. It's main purpose is to load the stored values
+		from disk for a given list of keys.
+	"""
+	def __init__ (self, db_file, data_root_dir):
+		self.db_file=db_file
+		self.data_root_dir = data_root_dir
+
+		self.db = TinyDB(db_file)
+		self.q = Query()
+
+	def query(self, query):
+		return(self.db.search(query))
+
+	def load_keys(self, datum, keys):
+		""" loads numpy arrays from disk for the corresponding keys"""
+
+		return_dict = {}
+
+		for k in keys:
+			try:
+				with gzip.GzipFile(os.path.join(self.data_root_dir, datum['result'][k]), 'rb') as fh:
+					return_dict[k] = pickle.load(fh)
+			except:
+				pass
+				#TODO: raise a more meaningful Warning or something
+		return(return_dict)
+
+
