@@ -206,24 +206,24 @@ def create_tinyDB(source_dir, destination, overwrite=False, skip_incomplete=True
 		tinyDB file.
 	"""
 	if os.path.isfile(destination) and not overwrite:
-		fn = args.destination
+		fn = destination
 		raise FileExistsError("Databasefile %s already exists, delete it or use the argument 'overwrite=True' to recreate the DB."%destination)
 	
 	tmp_filename = destination+'.tmp'
 	db = tinydb.TinyDB(tmp_filename)
 
 	# recursively walk through the subdirs
-	for cur, dirs, files in os.walk(args.source_dir):
+	for cur, dirs, files in os.walk(source_dir):
 		try:
 			# load the db file (which is written last, so  all other files should exist)
 			fn = os.path.join(cur,db_filename)
 			if not os.path.isfile(fn): continue
-			with open(fn, 'rb') as fh:
+			with open(fn, 'r') as fh:
 				datum = json.load(fh)
 				# get relative path wrt. to the data root
-				rel_path = os.path.relpath(cur, args.source_dir)
+				rel_path = os.path.relpath(cur, source_dir)
 				# update the entries with the relative path
-				if datum['STATUS'] != 'COMPLETED' and skip_incomplete:
+				if datum['status'] != 'COMPLETED' and skip_incomplete:
 					continue
 
 				for k,v in datum['result'].items():
@@ -235,6 +235,9 @@ def create_tinyDB(source_dir, destination, overwrite=False, skip_incomplete=True
 			if logger:
 				logger.INFO("Something went wrong loading subdirectory %s. Skipping it."%cur)
 				logger.INFO(e)
+			else:
+				print("Something went wrong loading subdirectory %s. Skipping it."%cur)
+				print(e)
 			continue
 
 	# replace old db file with current one
@@ -249,8 +252,8 @@ class tinydb_data(object):
 		self.db_file=db_file
 		self.data_root_dir = data_root_dir
 
-		self.db = TinyDB(db_file)
-		self.q = Query()
+		self.db = tinydb.TinyDB(db_file)
+		self.q = tinydb.Query()
 
 	def query(self, query):
 		return(self.db.search(query))
@@ -264,7 +267,8 @@ class tinydb_data(object):
 			try:
 				with gzip.GzipFile(os.path.join(self.data_root_dir, datum['result'][k]), 'rb') as fh:
 					return_dict[k] = pickle.load(fh)
-			except:
+			except Exception as e:
+				print(e)
 				pass
 				#TODO: raise a more meaningful Warning or something
 		return(return_dict)
