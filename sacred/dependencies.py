@@ -120,7 +120,8 @@ class PackageDependency(object):
             return
         try:
             self.version = pkg_resources.get_distribution(self.name).version
-        except pkg_resources.DistributionNotFound:
+        except (pkg_resources.ResolutionError,
+                pkg_resources.RequirementParseError):
             self.version = '<unknown>'
 
     def to_json(self):
@@ -178,7 +179,7 @@ def create_source_or_dep(modname, mod, dependencies, sources, experiment_path):
         sources.add(s)
     elif mod is not None:
         pdep = PackageDependency.create(mod)
-        if pdep.name.find('.') == -1 or pdep.version is not None:
+        if '.' not in pdep.name or pdep.version is not None:
             dependencies.add(pdep)
 
 
