@@ -31,8 +31,7 @@ class HPCFSObserver(RunObserver):
     @classmethod
     def create(cls, basedir, resource_dir=None, source_dir=None,
                priority=DEFAULT_FILE_STORAGE_PRIORITY):
-        if not os.path.exists(basedir):
-            os.makedirs(basedir)
+        os.makedirs(basedir, exists_ok=True)
         resource_dir = resource_dir or os.path.join(basedir, '_resources')
         source_dir = source_dir or os.path.join(basedir, '_sources')
         return cls(basedir, resource_dir, source_dir, priority)
